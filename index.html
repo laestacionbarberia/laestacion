@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LA ESTACION - BARBERIA</title>
+<meta name="theme-color" content="#1c1409">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LA ESTACION">
+<meta name="description" content="Reservá tu turno en LA ESTACION - BARBERIA">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -35,7 +44,10 @@
     color:var(--ink);
     font-family:'Work Sans', sans-serif;
     min-height:100vh;
+    overflow-x:hidden;
+    max-width:100vw;
   }
+  html{ overflow-x:hidden; max-width:100vw; }
   .stripe{
     height:3px;
     background:linear-gradient(90deg, var(--red) 0%, var(--blue) 50%, var(--gold) 100%);
@@ -570,11 +582,41 @@
     background:#fff;
     border-top:1px solid var(--line);
   }
-  .connection-status{ display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:18px; }
-  .connection-dot{ width:8px; height:8px; border-radius:50%; background:#aeb6c2; box-shadow:0 0 0 3px rgba(174,182,194,.16); }
+  .connection-status{ display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:18px; flex-wrap:wrap; }
+  .connection-dot{ width:8px; height:8px; border-radius:50%; background:#aeb6c2; box-shadow:0 0 0 3px rgba(174,182,194,.16); flex-shrink:0; }
   .connection-status.online .connection-dot{ background:#4C7A4A; box-shadow:0 0 0 3px rgba(76,122,74,.16); }
   .connection-status.offline .connection-dot{ background:var(--red); box-shadow:0 0 0 3px rgba(159,43,43,.14); }
-  .connection-status.checking .connection-dot{ background:var(--gold); animation:connectionPulse 1s ease-in-out infinite; }
+  .connection-status.checking .connection-dot,
+  .connection-status.syncing .connection-dot{ background:var(--gold); animation:connectionPulse 1s ease-in-out infinite; }
+  .connection-retry{
+    margin-left:6px; padding:2px 10px; border-radius:999px; border:1px solid var(--line);
+    background:#fff; font-size:12px; font-family:inherit; cursor:pointer; color:var(--ink);
+  }
+  .connection-retry:hover{ background:var(--gold); color:#1c1409; border-color:var(--gold); }
+  #offlineBanner{
+    display:none; position:sticky; top:0; z-index:50; padding:10px 16px;
+    background:#5c1f1f; color:#ffe8e8; font-size:13px; text-align:center;
+    gap:10px; align-items:center; justify-content:center;
+  }
+  #offlineBanner.show{ display:flex; flex-wrap:wrap; }
+  #offlineBanner button{
+    border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff;
+    border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  #offlineBanner button:hover{ background:rgba(255,255,255,.22); }
+  #pwaInstallBar{
+    display:none; position:fixed; left:50%; transform:translateX(-50%);
+    bottom:max(16px, env(safe-area-inset-bottom, 0px)); z-index:10000;
+    max-width:min(420px, calc(100vw - 24px)); width:100%; padding:12px 14px;
+    border-radius:14px; background:#1c1409; color:#f3e6c4;
+    box-shadow:0 10px 30px rgba(0,0,0,.35); align-items:center; gap:12px; font-size:13px;
+  }
+  #pwaInstallBar.show{ display:flex; }
+  #pwaInstallBar strong{ display:block; font-size:14px; color:#fff; margin-bottom:2px; }
+  #pwaInstallBar .pwa-actions{ display:flex; gap:8px; flex-shrink:0; }
+  #pwaInstallBar button{ border:none; border-radius:999px; padding:8px 14px; font-size:13px; font-family:inherit; cursor:pointer; }
+  #pwaInstallBtn{ background:var(--gold); color:#1c1409; font-weight:700; }
+  #pwaDismissBtn{ background:transparent; color:rgba(243,230,196,.75); border:1px solid rgba(243,230,196,.25); }
   .dev-access-dot{
     position:absolute;
     top:20px;
@@ -855,6 +897,7 @@
     30%{ transform:translateY(-5px); opacity:1; }
   }
   .chat-input-area{
+    position:relative;
     padding:12px 14px 14px;
     background:rgba(255,255,255,0.82);
     backdrop-filter:blur(6px);
@@ -999,52 +1042,37 @@
     border-radius:6px;
     font-size:13px;
   }
-  /* Único botón de WhatsApp: flotante y siempre visible en la vista cliente */
+  /* Botón WhatsApp: círculo con ícono oficial, encima de la línea de opciones */
   .wa-banner{
-    position:fixed;
-    right:20px;
-    bottom:20px;
-    z-index:9999;
+    position:absolute;
+    right:10px;
+    bottom:calc(100% + 10px);
+    left:auto; top:auto;
+    z-index:30;
     display:none;
-    margin:0;
-    padding:0;
-    background:transparent;
-    border:0;
-    font-size:14px;
+    margin:0; padding:0;
+    background:transparent; border:0;
+    width:46px; height:46px;
   }
   .wa-banner a{
-    color:#fff;
-    font-weight:700;
-    text-decoration:none;
+    color:#fff; text-decoration:none;
+    display:flex; width:100%; height:100%;
+    align-items:center; justify-content:center;
   }
   .wa-banner a:hover{ text-decoration:none; }
-
   .wa-float-btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:8px;
-    min-width:58px;
-    height:58px;
-    padding:0 18px;
-    border-radius:999px;
-    background:#25D366;
-    color:#fff !important;
-    font-weight:700;
-    font-size:14px;
-    text-decoration:none !important;
-    border:none;
-    cursor:pointer;
-    box-shadow:0 5px 18px rgba(0,0,0,.28);
-    transition:transform .18s ease, box-shadow .18s ease;
+    display:flex; align-items:center; justify-content:center;
+    width:46px; height:46px; min-width:46px; padding:0;
+    border-radius:50%; background:#25D366; color:#fff !important;
+    font-size:0; text-decoration:none !important; border:none; cursor:pointer;
+    box-shadow:0 4px 14px rgba(37,211,102,.42);
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+    box-sizing:border-box;
   }
-  .wa-float-btn:hover{
-    background:#1ebe57;
-    color:#fff !important;
-    transform:translateY(-2px);
-    box-shadow:0 7px 22px rgba(0,0,0,.32);
-  }
-  .wa-float-btn:active{ transform:translateY(0); }
+  .wa-float-btn:hover{ background:#1ebe57; transform:scale(1.06); box-shadow:0 6px 18px rgba(37,211,102,.5); }
+  .wa-float-btn:active{ transform:scale(0.96); }
+  .wa-float-btn svg{ width:24px; height:24px; display:block; pointer-events:none; transform:none; margin:0; }
+  .wa-float-btn .wa-label{ display:none !important; }
 
   /* Estado automático de turnos que ya pasaron */
   .ticket-attended{
@@ -1068,15 +1096,9 @@
   }
 
   @media (max-width:600px){
-    .wa-banner{ right:14px; bottom:14px; }
-    .wa-float-btn{
-      width:56px;
-      min-width:56px;
-      height:56px;
-      padding:0;
-      font-size:0;
-    }
-    .wa-float-btn .wa-label{ display:none; }
+    .wa-banner{ right:8px; bottom:calc(100% + 8px); width:44px; height:44px; }
+    .wa-float-btn{ width:44px; height:44px; min-width:44px; padding:0; }
+    .wa-float-btn svg{ width:22px; height:22px; }
   }
   .wa-setup-box{
     background:#f8f9fb;
@@ -1539,13 +1561,15 @@
   .blocked-chip.editable-cut{ cursor:pointer; }
   .blocked-chip.editable-cut:hover{ outline:2px solid rgba(184,147,63,.55); }
   .wa-float-btn{
-    display:inline-flex; align-items:center; gap:8px;
-    padding:10px 16px; border-radius:999px;
-    background:#25D366; color:#fff; font-weight:600; font-size:14px;
+    display:flex; align-items:center; justify-content:center;
+    width:46px; height:46px; min-width:46px; padding:0; border-radius:50%;
+    background:#25D366; color:#fff; font-weight:600; font-size:0;
     text-decoration:none; border:none; cursor:pointer;
-    box-shadow:0 4px 14px rgba(37,211,102,.35);
+    box-shadow:0 4px 14px rgba(37,211,102,.42);
   }
   .wa-float-btn:hover{ background:#1ebe57; color:#fff; }
+  .wa-float-btn svg{ width:24px; height:24px; display:block; pointer-events:none; transform:none; }
+  .wa-float-btn .wa-label{ display:none !important; }
 </style>
 </head>
 <body>
@@ -1564,6 +1588,10 @@
 </script>
 <div class="stripe"></div>
 <div class="app" id="mainApp">
+  <div id="offlineBanner" role="status" aria-live="polite">
+    <span id="offlineBannerText">Sin conexión a internet. Los turnos pueden no estar actualizados.</span>
+    <button type="button" id="offlineRetryBtn">Reintentar</button>
+  </div>
   <header>
     <button class="cache-reload-btn" id="clearCacheBtn" aria-label="Borrar caché y recargar" title="Borrar caché y recargar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -1587,10 +1615,10 @@
 
     <!-- ===================== VISTA CLIENTE (Chatbot) ===================== -->
     <section class="panel active" id="panel-cliente">
-      <div id="waBanner" class="wa-banner" style="display:none;"></div>
       <div class="chat-app">
         <div class="chat-messages" id="chatMessages" role="log" aria-live="polite"></div>
         <div class="chat-input-area">
+          <div id="waBanner" class="wa-banner" style="display:none;"></div>
           <div class="chat-quick-replies" id="chatQuickReplies"></div>
         </div>
       </div>
@@ -1772,7 +1800,18 @@
     </section>
   </main>
 
-  <footer id="syncFooter" aria-live="polite"><span class="connection-status checking" id="connectionStatus"><span class="connection-dot"></span><span id="connectionText">Conectando con Servidor…</span></span></footer>
+  <footer id="syncFooter" aria-live="polite"><span class="connection-status checking" id="connectionStatus"><span class="connection-dot"></span><span id="connectionText">Conectando con el servidor…</span></span></footer>
+</div>
+
+<div id="pwaInstallBar" role="dialog" aria-label="Instalar aplicación">
+  <div style="flex:1;min-width:0;">
+    <strong>Instalar LA ESTACION</strong>
+    <span>Agregala a tu pantalla de inicio y usala como una app.</span>
+  </div>
+  <div class="pwa-actions">
+    <button type="button" id="pwaDismissBtn">Ahora no</button>
+    <button type="button" id="pwaInstallBtn">Instalar</button>
+  </div>
 </div>
 
 <div class="modal-overlay" id="pinOverlay">
@@ -1928,16 +1967,52 @@
   function setConnectionStatus(state, detail){
     const el = document.getElementById('connectionStatus');
     const text = document.getElementById('connectionText');
+    const banner = document.getElementById('offlineBanner');
+    const bannerText = document.getElementById('offlineBannerText');
     if(!el || !text) return;
     el.className = 'connection-status ' + state;
+    const oldRetry = el.querySelector('.connection-retry');
+    if(oldRetry) oldRetry.remove();
     if(state === 'online'){
-      text.textContent = 'App Script conectado · sincronizado a las ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      text.textContent = 'Conectado · sincronizado a las ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      if(banner) banner.classList.remove('show');
+    }else if(state === 'syncing'){
+      text.textContent = 'Sincronizando con el servidor…';
     }else if(state === 'offline'){
-      text.textContent = 'App Script sin conexión' + (detail ? ' · ' + detail : '');
+      const msg = detail
+        ? ('Sin conexión · ' + detail)
+        : (navigator.onLine === false
+            ? 'Sin internet · no se pueden cargar ni guardar turnos'
+            : 'No se pudo llegar al servidor · revisá la URL o tu red');
+      text.textContent = msg;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'connection-retry';
+      btn.textContent = 'Reintentar';
+      btn.addEventListener('click', function(){
+        setConnectionStatus('syncing');
+        loadAll({ force: true }).catch(function(){});
+      });
+      el.appendChild(btn);
+      if(banner){
+        if(bannerText){
+          bannerText.textContent = navigator.onLine === false
+            ? 'Estás sin internet. Los turnos pueden no estar actualizados.'
+            : 'No hay conexión con el servidor. Tocá Reintentar o revisá la configuración.';
+        }
+        banner.classList.add('show');
+      }
     }else{
-      text.textContent = 'Verificando conexión con App Script…';
+      text.textContent = 'Verificando conexión con el servidor…';
     }
   }
+  window.addEventListener('online', function(){
+    setConnectionStatus('syncing');
+    if(typeof loadAll === 'function') loadAll({ force: true }).catch(function(){});
+  });
+  window.addEventListener('offline', function(){
+    setConnectionStatus('offline', 'sin internet');
+  });
 
   // Token de sesión del barbero (nunca guardamos la clave secreta en sí, solo este
   // token firmado por el servidor que expira solo a las pocas horas).
@@ -2328,7 +2403,11 @@
       return;
     }
 
-    if(!opts.silent) setConnectionStatus('checking');
+    if(!opts.silent) setConnectionStatus('syncing');
+    else {
+      const st = document.getElementById('connectionStatus');
+      if(st && st.classList.contains('offline')) setConnectionStatus('syncing');
+    }
     loadAllInFlight = (async function(){
       try{
         // force o poll: siempre intentar red; force → fresh=1 en servidor
@@ -2340,11 +2419,14 @@
         setConnectionStatus('online');
       }catch(e){
         console.error(e);
+        var detail = '';
+        if(!navigator.onLine) detail = 'sin internet';
+        else if(e && e.message) detail = String(e.message).slice(0, 80);
         if(lastAgendaData){
           applyServerData(lastAgendaData);
-          setConnectionStatus('online');
+          setConnectionStatus('offline', detail || 'mostrando datos en caché');
         }else{
-          setConnectionStatus('offline', e && e.message ? e.message : '');
+          setConnectionStatus('offline', detail);
         }
       }
       renderShopHeader();
@@ -3286,21 +3368,22 @@
   function refreshWaBanner(){
     const banner = document.getElementById('waBanner');
     if(!banner) return;
-
-    // Siempre toma el número actual de config. Si el barbero lo cambia
-    // desde la app y guarda, renderShopHeader() vuelve a llamar esta función.
     const phone = getWhatsappPhone();
-
+    try{ localStorage.removeItem('waBtnPos'); }catch(e){}
+    banner.style.left = '';
+    banner.style.top = '';
+    banner.style.right = '';
+    banner.style.bottom = '';
     if(phone){
       banner.style.display = 'block';
       banner.innerHTML =
         '<a class="wa-float-btn" href="https://wa.me/' + phone + '" ' +
         'target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp">' +
-          '<span aria-hidden="true" style="font-size:25px;line-height:1;">💬</span>' +
-          '<span class="wa-label">WhatsApp</span>' +
+          '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+            '<path fill="#fff" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>' +
+          '</svg>' +
         '</a>';
     }else{
-      // Si no hay número configurado, no se muestra ningún botón.
       banner.style.display = 'none';
       banner.innerHTML = '';
     }
@@ -4044,6 +4127,56 @@
     }
   }
 
+  (function(){
+    var btn = document.getElementById('offlineRetryBtn');
+    if(btn){
+      btn.addEventListener('click', function(){
+        setConnectionStatus('syncing');
+        if(typeof loadAll === 'function') loadAll({ force: true }).catch(function(){});
+      });
+    }
+  })();
+
+  (function(){
+    if('serviceWorker' in navigator){
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('./sw.js').then(function(reg){
+          console.log('SW registrado', reg.scope);
+        }).catch(function(err){ console.warn('SW no registrado:', err); });
+      });
+    }
+    var deferredPrompt = null;
+    var bar = document.getElementById('pwaInstallBar');
+    var installBtn = document.getElementById('pwaInstallBtn');
+    var dismissBtn = document.getElementById('pwaDismissBtn');
+    function dismissed(){ try{ return localStorage.getItem('pwaInstallDismissed') === '1'; }catch(e){ return false; } }
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      deferredPrompt = e;
+      if(bar && !dismissed() && !window.matchMedia('(display-mode: standalone)').matches){
+        bar.classList.add('show');
+      }
+    });
+    if(installBtn){
+      installBtn.addEventListener('click', async function(){
+        if(!deferredPrompt) return;
+        deferredPrompt.prompt();
+        try{ await deferredPrompt.userChoice; }catch(e){}
+        deferredPrompt = null;
+        if(bar) bar.classList.remove('show');
+      });
+    }
+    if(dismissBtn){
+      dismissBtn.addEventListener('click', function(){
+        try{ localStorage.setItem('pwaInstallDismissed', '1'); }catch(e){}
+        if(bar) bar.classList.remove('show');
+      });
+    }
+    if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone){
+      if(bar) bar.classList.remove('show');
+    }
+  })();
+
   // Panel barbero siempre cerrado al cargar
   try{ showBarberLock(); }catch(e){}
 
@@ -4064,25 +4197,6 @@
   }
 })();
 </script>
-  <!-- Botón flotante de WhatsApp -->
-<a href="https://wa.me/573044837612" class="whatsapp-btn" target="_blank">
-  <img src="whatsapp-icono.png" alt="WhatsApp">
-</a>
 
-<style>
-  .whatsapp-btn {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-  }
-  .whatsapp-btn img {
-    width: 60px;
-    height: auto;
-  }
-</style>
-
-</body>
-</html>
 </body>
 </html>
