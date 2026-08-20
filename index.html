@@ -1739,17 +1739,6 @@
           <div class="helper">Los clientes podrán reservar por WhatsApp. Con la API de Meta configurada en Apps Script, el bot responde automáticamente.</div>
         </div>
 
-        <div class="wa-setup-box" id="waSetupBox">
-          <strong>Bot automático de WhatsApp Business</strong> (opcional)<br>
-          1. Creá una app en <a href="https://developers.facebook.com" target="_blank" rel="noopener">Meta for Developers</a> → WhatsApp → API Setup.<br>
-          2. En Apps Script → ⚙ Project Settings → Script properties, agregá:<br>
-          &nbsp;&nbsp;<code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_VERIFY_TOKEN</code><br>
-          3. Volvé a <strong>Implementar → Nueva versión</strong> de la Web App.<br>
-          4. En Meta → WhatsApp → Configuration → Webhook, pegá la URL <code>/exec</code> y el mismo verify token; suscribite a <em>messages</em>.<br>
-          El bot permite agendar, ver horarios y consultar turnos por WhatsApp. Además envía confirmación al reservar desde la web.
-          <div id="waBotStatus" style="margin-top:10px;"></div>
-        </div>
-
         <div class="field">
           <label for="blockDate">Bloquear una fecha puntual (feriado, día libre)</label>
           <div class="row">
