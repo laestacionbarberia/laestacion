@@ -3428,7 +3428,7 @@
           slotMin: config.slotMin || 60,
           days: days,
           dayHours: dayHours,
-          cutTypes: config.cutTypes,
+          cutTypes: workingCutTypes.slice(),
           staff: config.staff,
           reminderHoursBefore: config.reminderHoursBefore || 24,
           maxBookingsPerEmailPerDay: config.maxBookingsPerEmailPerDay || 3,
