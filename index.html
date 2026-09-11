@@ -3973,7 +3973,7 @@
     }catch(e){
       console.error('Sincronización completa:', e);
       if(btn) btn.textContent = '⚠ Reintentar';
-      setConnectionStatus('offline');
+      setConnectionStatus('offline', e && e.message ? String(e.message).slice(0, 120) : '');
     }finally{
       if(btn) btn.disabled = false;
     }
