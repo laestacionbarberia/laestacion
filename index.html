@@ -1925,6 +1925,7 @@
   let workingCutTypes = []; // copia editable en el panel del barbero, antes de guardar
   let workingStaff = []; // idem para la lista de barberos/sillas
   let appointments = [];
+  let barberAppointments = [];
   let selectedTime = null;
   let selectedStaffId = null;
   let refreshTimer = null;
@@ -2480,6 +2481,7 @@
   function showBarberContent(){
     document.getElementById('barberLock').style.display = 'none';
     document.getElementById('barberContent').style.display = 'block';
+    syncAllBarberAppointments();
     loadStats();
     loadWaitlistPanel();
     loadWhatsappStatus();
@@ -3751,24 +3753,25 @@
       ? ('<a class="ticket-phone-wa" href="https://wa.me/' + phoneDigits + '" target="_blank" rel="noopener" title="Abrir WhatsApp del cliente">📱 ' + escapeHtml(a.phone) + '</a>')
       : (a.phone ? ('<span class="helper">📱 ' + escapeHtml(a.phone) + '</span>') : '');
 
-    const attended = isAppointmentPast(a);
+    const canceled = String(a.status || '').toLowerCase().indexOf('cancel') !== -1;
+    const attended = !canceled && isAppointmentPast(a);
 
     // Si ya pasó, queda como ATENDIDO automáticamente.
     // No se muestran botones de cancelar/reprogramar para evitar modificar
     // accidentalmente un turno que ya terminó.
-    const actions = (withCancel && !attended)
+    const actions = (withCancel && !attended && !canceled)
       ? `<div class="ticket-actions"><button class="btn secondary small" data-reschedule="${a.id}">Reprogramar</button> <button class="btn secondary small" data-cancel="${a.id}">Cancelar turno</button></div>`
       : '';
 
     return `
-      <div class="ticket${attended ? ' ticket-attended' : ''}">
+      <div class="ticket${attended ? ' ticket-attended' : ''}${canceled ? ' ticket-canceled' : ''}">
         <div class="ticket-main">
           <div class="ticket-name">${escapeHtml(a.client)}</div>
           <div class="ticket-date">${formatDate(a.date)} · ${a.time} · ${a.id}</div>
           <span class="ticket-cut-tag">${escapeHtml(a.cut || 'Sin especificar')}${a.price ? ' · $'+a.price : ''}</span>
           ${phoneLink ? `<div class="helper" style="margin-top:4px;">${phoneLink}</div>` : ''}
           ${barber ? `<div class="helper" style="margin-top:4px;">🪑 ${escapeHtml(barber)}</div>` : ''}
-          ${attended ? '<div class="ticket-status-attended">✓ ATENDIDO</div>' : ''}
+          ${canceled ? '<div class="ticket-status-attended">✕ CANCELADO</div>' : (attended ? '<div class="ticket-status-attended">✓ ATENDIDO</div>' : '')}
           ${actions}
         </div>
         <div class="ticket-stub">
@@ -3787,18 +3790,10 @@
     const nameFilter = document.getElementById('filterName').value.trim().toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
 
-    const nowLocal = new Date();
-    const localToday =
-      nowLocal.getFullYear() + '-' +
-      String(nowLocal.getMonth()+1).padStart(2,'0') + '-' +
-      String(nowLocal.getDate()).padStart(2,'0');
-
-    let upcoming = appointments
-      // Conservamos hoy completo para que los turnos que ya pasaron
-      // cambien visualmente a ATENDIDO. Los días anteriores siguen fuera
-      // de la vista normal.
-      .filter(a => a.date >= localToday)
-      .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+    // En el panel del barbero mostramos TODOS los registros que existen
+    // en Google Sheets, incluidos los turnos de días anteriores y los ya atendidos.
+    let upcoming = (barberAppointments.length ? barberAppointments : appointments).slice()
+      .sort((a,b)=> (String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time)));
 
     if(nameFilter){
       upcoming = upcoming.filter(a => a.client.toLowerCase().includes(nameFilter));
@@ -3825,6 +3820,7 @@
         try{
           await apiPost('cancelAppointment', { id: btn.dataset.cancel });
           appointments = appointments.filter(a=>a.id !== btn.dataset.cancel);
+          barberAppointments = barberAppointments.filter(a=>a.id !== btn.dataset.cancel);
           renderAppointmentsList();
           renderClientDateAvailability();
         }catch(e){ console.error(e); }
@@ -3959,33 +3955,31 @@
     renderAppointmentsList();
   });
 
-  // ---------- sincronización manual con Google Sheets ----------
-  document.getElementById('syncNowBtn').addEventListener('click', async ()=>{
+  // ---------- sincronización completa con Google Sheets ----------
+  async function syncAllBarberAppointments(){
     const btn = document.getElementById('syncNowBtn');
-    if(!apiReady) return;
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '⏳ Sincronizando...';
+    if(!apiReady || !barberToken) return;
+    const originalText = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
     try{
-      // forceFresh=true obliga al servidor a ignorar su caché y volver a leer Google Sheets.
-      const data = await apiGet({ forceFresh: true });
-      applyServerData(data);
+      const data = await apiPost('syncAllAppointments', {});
+      barberAppointments = Array.isArray(data.appointments) ? data.appointments : [];
       renderAppointmentsList();
-      renderBlockedList();
-      renderShopHeader();
-      renderStaffOptions();
-      renderBarberConfig();
       setConnectionStatus('online');
-      btn.textContent = '✓ Sincronizado';
-      setTimeout(()=>{ btn.textContent = originalText; }, 1800);
+      if(btn){
+        btn.textContent = '✓ Todos sincronizados';
+        setTimeout(()=>{ btn.textContent = originalText || '🔄 Sincronizar ahora'; }, 1800);
+      }
     }catch(e){
-      console.error('Sincronización manual:', e);
-      btn.textContent = '⚠ Reintentar';
+      console.error('Sincronización completa:', e);
+      if(btn) btn.textContent = '⚠ Reintentar';
       setConnectionStatus('offline');
     }finally{
-      btn.disabled = false;
+      if(btn) btn.disabled = false;
     }
-  });
+  }
+
+  document.getElementById('syncNowBtn').addEventListener('click', syncAllBarberAppointments);
 
   // ---------- polling exhaustivo de agenda ----------
   function schedulePoll(){
