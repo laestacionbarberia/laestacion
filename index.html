@@ -1894,7 +1894,7 @@
   // para que TODOS los visitantes puedan usar la página (y los enlaces de "gestionar mi
   // turno" que se mandan por correo) sin que cada uno tenga que configurarla a mano.
   // Si la dejás vacía, cada navegador la puede configurar igual con el botón ⚙.
-  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbzI2hQ10Ww_URxYOpwsJqXBbqbcHYGOpTEkBw8e6R2kAdgNgOXJNURl6gW7-bw1ywAWTA/exec';
+  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycby3tnIZSOfPv6zM50slAJWnqtxTueNjiOOkYnxyqTwMs8yUmQmy2WTqZOSR-ed_NjPgkg/exec';
 
   const defaultConfig = {
     barberName: 'LA ESTACION - BARBERIA',
@@ -1926,6 +1926,10 @@
   let workingStaff = []; // idem para la lista de barberos/sillas
   let appointments = [];
   let barberAppointments = [];
+  // Tabla original recibida al sincronizar: conserva columnas personalizadas
+  // que puedan existir en Google Sheets además de las del sistema.
+  let barberSheetHeaders = [];
+  let barberSheetRows = [];
   let selectedTime = null;
   let selectedStaffId = null;
   let refreshTimer = null;
@@ -3820,7 +3824,11 @@
         try{
           await apiPost('cancelAppointment', { id: btn.dataset.cancel });
           appointments = appointments.filter(a=>a.id !== btn.dataset.cancel);
-          barberAppointments = barberAppointments.filter(a=>a.id !== btn.dataset.cancel);
+          // Conservamos el registro en el historial completo: solo cambia su estado.
+          // Así una cancelación no hace desaparecer una fila que sí existe en Sheets.
+          barberAppointments = barberAppointments.map(a => a.id === btn.dataset.cancel
+            ? Object.assign({}, a, { status: 'cancelado' })
+            : a);
           renderAppointmentsList();
           renderClientDateAvailability();
         }catch(e){ console.error(e); }
@@ -3828,7 +3836,8 @@
     });
     el.querySelectorAll('[data-reschedule]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        const apt = appointments.find(a=>a.id === btn.dataset.reschedule);
+        const apt = barberAppointments.find(a=>a.id === btn.dataset.reschedule)
+          || appointments.find(a=>a.id === btn.dataset.reschedule);
         if(apt) openRescheduleModal(apt);
       });
     });
@@ -3934,6 +3943,9 @@
         appointments = appointments.map(a => a.id === rescheduleTarget.id
           ? Object.assign({}, a, { date: dateStr, time: rescheduleSelectedTime })
           : a);
+        barberAppointments = barberAppointments.map(a => a.id === rescheduleTarget.id
+          ? Object.assign({}, a, { date: dateStr, time: rescheduleSelectedTime })
+          : a);
         renderAppointmentsList();
         renderClientDateAvailability();
         closeRescheduleModal();
@@ -3964,6 +3976,8 @@
     try{
       const data = await apiPost('syncAllAppointments', {});
       barberAppointments = Array.isArray(data.appointments) ? data.appointments : [];
+      barberSheetHeaders = Array.isArray(data.sheetHeaders) ? data.sheetHeaders : [];
+      barberSheetRows = Array.isArray(data.sheetRows) ? data.sheetRows : [];
       renderAppointmentsList();
       setConnectionStatus('online');
       if(btn){
@@ -3973,7 +3987,7 @@
     }catch(e){
       console.error('Sincronización completa:', e);
       if(btn) btn.textContent = '⚠ Reintentar';
-      setConnectionStatus('offline', e && e.message ? String(e.message).slice(0, 120) : '');
+      setConnectionStatus('offline');
     }finally{
       if(btn) btn.disabled = false;
     }
@@ -4064,16 +4078,30 @@
   document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
     const nameFilter = document.getElementById('filterName').value.trim().toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
-    let rows = appointments
-      .filter(a => a.date >= today.toISOString().slice(0,10))
+    // El panel del barbero exporta la copia completa y autenticada de Sheets:
+    // incluye históricos y cancelados, sin el filtro implícito de "desde hoy".
+    let rows = (barberAppointments.length ? barberAppointments : appointments)
       .filter(a => !nameFilter || a.client.toLowerCase().includes(nameFilter))
       .filter(a => !dateFilter || a.date === dateFilter)
       .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
-    const header = ['id','fecha','hora','cliente','corte','precio'];
-    const csvLines = [header.join(',')].concat(rows.map(a=>{
-      const cells = [a.id, a.date, a.time, a.client, a.cut||'', a.price||''];
-      return cells.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',');
-    }));
+    // Si el servidor entregó la tabla original, respetamos todos sus encabezados
+    // y todas sus columnas; si no, conservamos una exportación compatible.
+    const hasCompleteTable = barberSheetHeaders.length > 0 && barberSheetRows.length > 0;
+    const header = hasCompleteTable
+      ? barberSheetHeaders
+      : ['id','fecha','hora','cliente','telefono','corte','precio','email','peluqueroId','estado','creadoEn'];
+    const selectedIds = new Set(rows.map(a => String(a.id)));
+    const csvRows = hasCompleteTable
+      ? barberSheetRows.filter(row => selectedIds.has(String(row[0] || '')))
+      : rows.map(a => [a.id, a.date, a.time, a.client, a.phone||'', a.cut||'', a.price||'', a.email||'', a.staffId||'', a.status||'', a.createdAt||'']);
+    const toCsvCell = c => {
+      // Evita que Excel interprete valores de una hoja como fórmulas al abrir el CSV.
+      const value = String(c == null ? '' : c).replace(/"/g,'""');
+      return '"' + (/^[=+\-@]/.test(value) ? "'" : '') + value + '"';
+    };
+    const csvLines = [header.map(toCsvCell).join(',')].concat(
+      csvRows.map(row => row.map(toCsvCell).join(','))
+    );
     const blob = new Blob([csvLines.join('\n')], { type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
