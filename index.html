@@ -1757,7 +1757,12 @@
       </div>
 
       <div class="card">
-        <h2>Turnos agendados</h2>
+        <h2>Todos los turnos agendados</h2>
+        <div class="helper" style="margin-bottom:10px;">
+          Se muestran todos los turnos activos, incluidos los que ya pasaron.
+          Podés filtrar por nombre o por una fecha específica. La agenda se sincroniza
+          automáticamente con Google Sheets.
+        </div>
         <div class="row">
           <div class="field">
             <label for="filterName">Buscar por nombre</label>
@@ -1772,6 +1777,9 @@
           </div>
           <div class="field" style="flex:0 0 auto; align-self:flex-end;">
             <button class="btn secondary" id="exportCsvBtn">Exportar CSV</button>
+          </div>
+          <div class="field" style="flex:0 0 auto; align-self:flex-end;">
+            <button class="btn secondary" id="forceSyncBtn" type="button">🔄 Sincronizar ahora</button>
           </div>
         </div>
         <div id="appointmentsList"></div>
@@ -3781,55 +3789,62 @@
 
   function renderAppointmentsList(){
     const el = document.getElementById('appointmentsList');
+    if(!el) return;
+
     const nameFilter = document.getElementById('filterName').value.trim().toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
 
-    const nowLocal = new Date();
-    const localToday =
-      nowLocal.getFullYear() + '-' +
-      String(nowLocal.getMonth()+1).padStart(2,'0') + '-' +
-      String(nowLocal.getDate()).padStart(2,'0');
-
-    let upcoming = appointments
-      // Conservamos hoy completo para que los turnos que ya pasaron
-      // cambien visualmente a ATENDIDO. Los días anteriores siguen fuera
-      // de la vista normal.
-      .filter(a => a.date >= localToday)
-      .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+    // Mostramos TODOS los turnos activos que devuelve Google Sheets.
+    // La fecha actual NO se usa para ocultar históricos. El filtro de fecha
+    // solo se aplica cuando el barbero lo selecciona.
+    let visible = Array.isArray(appointments) ? appointments.slice() : [];
 
     if(nameFilter){
-      upcoming = upcoming.filter(a => a.client.toLowerCase().includes(nameFilter));
-    }
-    if(dateFilter){
-      upcoming = upcoming.filter(a => a.date === dateFilter);
+      visible = visible.filter(a =>
+        String(a.client || '').toLowerCase().includes(nameFilter)
+      );
     }
 
-    if(upcoming.length===0){
-      const hayFiltro = nameFilter || dateFilter;
+    if(dateFilter){
+      visible = visible.filter(a => String(a.date || '') === dateFilter);
+    }
+
+    visible.sort((a,b) =>
+      (String(a.date || '') + String(a.time || ''))
+        .localeCompare(String(b.date || '') + String(b.time || ''))
+    );
+
+    if(visible.length === 0){
+      const hayFiltro = !!(nameFilter || dateFilter);
       el.innerHTML = '<div class="empty">' + (hayFiltro
         ? 'No hay turnos que coincidan con ese filtro.'
         : 'Todavía no hay turnos agendados.') + '</div>';
       return;
     }
+
     try{
-      el.innerHTML = upcoming.map(a=>ticketHtml(a, true)).join('');
+      el.innerHTML = visible.map(a => ticketHtml(a, true)).join('');
     }catch(err){
       console.error('ticketHtml', err);
       el.innerHTML = '<div class="empty">Error al mostrar turnos.</div>';
+      return;
     }
+
     el.querySelectorAll('[data-cancel]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         try{
           await apiPost('cancelAppointment', { id: btn.dataset.cancel });
-          appointments = appointments.filter(a=>a.id !== btn.dataset.cancel);
-          renderAppointmentsList();
-          renderClientDateAvailability();
-        }catch(e){ console.error(e); }
+          // Después de una modificación, volvemos a leer Google Sheets.
+          await loadAll({ force: true, silent: true });
+        }catch(e){
+          console.error(e);
+        }
       });
     });
+
     el.querySelectorAll('[data-reschedule]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        const apt = appointments.find(a=>a.id === btn.dataset.reschedule);
+        const apt = appointments.find(a => a.id === btn.dataset.reschedule);
         if(apt) openRescheduleModal(apt);
       });
     });
@@ -4036,12 +4051,49 @@
   }
 
   // ---------- exportar CSV ----------
+  const forceSyncBtn = document.getElementById('forceSyncBtn');
+  if(forceSyncBtn){
+    forceSyncBtn.addEventListener('click', async ()=>{
+      if(!apiReady){
+        setConnectionStatus('offline', 'falta configurar la URL del servidor');
+        return;
+      }
+
+      const originalText = forceSyncBtn.innerHTML;
+      forceSyncBtn.disabled = true;
+      forceSyncBtn.innerHTML = '⏳ Sincronizando…';
+      setConnectionStatus('syncing');
+
+      try{
+        // Sincronización explícita: servidor → flush → lectura directa de Sheets.
+        const syncData = await apiPost('syncNow', {});
+        applyServerData(syncData);
+        lastAgendaData = syncData;
+        lastAgendaAt = Date.now();
+
+        setConnectionStatus('online');
+        renderShopHeader();
+        renderStaffOptions();
+        renderBarberConfig();
+        renderAppointmentsList();
+        renderBlockedList();
+
+        forceSyncBtn.innerHTML = '✓ Sincronizado';
+        setTimeout(()=>{ forceSyncBtn.innerHTML = originalText; }, 1600);
+      }catch(e){
+        console.error('Sincronización manual:', e);
+        forceSyncBtn.innerHTML = '⚠ Reintentar';
+      }finally{
+        forceSyncBtn.disabled = false;
+      }
+    });
+  }
+
   document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
     const nameFilter = document.getElementById('filterName').value.trim().toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
     let rows = appointments
-      .filter(a => a.date >= today.toISOString().slice(0,10))
-      .filter(a => !nameFilter || a.client.toLowerCase().includes(nameFilter))
+      .filter(a => !nameFilter || String(a.client || '').toLowerCase().includes(nameFilter))
       .filter(a => !dateFilter || a.date === dateFilter)
       .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
     const header = ['id','fecha','hora','cliente','corte','precio'];
