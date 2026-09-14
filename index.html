@@ -3794,9 +3794,12 @@
     const nameFilter = document.getElementById('filterName').value.trim().toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
 
-    // En el panel del barbero mostramos TODOS los registros que existen
-    // en Google Sheets, incluidos los turnos de días anteriores y los ya atendidos.
+    // Solo turnos FUTUROS (no atendidos). Los ya pasados y cancelados no se muestran.
     let upcoming = (barberAppointments.length ? barberAppointments : appointments).slice()
+      .filter(a => {
+        const canceled = String(a.status || '').toLowerCase().indexOf('cancel') !== -1;
+        return !canceled && !isAppointmentPast(a);
+      })
       .sort((a,b)=> (String(a.date)+String(a.time)).localeCompare(String(b.date)+String(b.time)));
 
     if(nameFilter){
@@ -4130,6 +4133,18 @@
         return;
       }
       const apt = data.appointment;
+
+      // Si el turno ya pasó → ya fue atendido, no mostrar opciones
+      if (isAppointmentPast(apt)) {
+        content.innerHTML = `
+          <h2>${escapeHtml(apt.client)}</h2>
+          <p>${formatDate(apt.date)} a las ${apt.time} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
+          <p class="helper">N.º de turno: ${apt.id}</p>
+          <div class="msg ok" style="margin-top:16px;">✓ Este turno ya fue atendido.</div>
+        `;
+        return;
+      }
+
       content.innerHTML = `
         <h2>${escapeHtml(apt.client)}</h2>
         <p>${formatDate(apt.date)} a las ${apt.time} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
