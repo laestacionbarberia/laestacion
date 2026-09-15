@@ -2496,7 +2496,7 @@
   // Después de BARBER_LOCK_MINUTES sin actividad (mientras el panel está
   // desbloqueado), se cierra la sesión sola y vuelve a pedir la clave.
   // Cambiá el número de acá si querés otro tiempo.
- const BARBER_LOCK_MINUTES = 3; // <-- Pon aquí los minutos que quieras (ej. 5, 10, 30)
+ const BARBER_LOCK_MINUTES = 2; // <-- Pon aquí los minutos que quieras (ej. 5, 10, 30)
   const BARBER_LOCK_MS = BARBER_LOCK_MINUTES * 60 * 1000; // Multiplicado por 60 para que sean minutos reales
   let barberLockTimer = null;
 
