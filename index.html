@@ -1894,21 +1894,21 @@
   // para que TODOS los visitantes puedan usar la página (y los enlaces de "gestionar mi
   // turno" que se mandan por correo) sin que cada uno tenga que configurarla a mano.
   // Si la dejás vacía, cada navegador la puede configurar igual con el botón ⚙.
-  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxqdWoho2kNmJ76Rmn2CMc4Xbk8Cgz7yJjlyeYqHyMCnEP2k9XIU_Ork6v9IsmotN0iFw/exec';
+  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwuzUtXwpaW_Bmci-F296i8EuRDCUaLmJsbtDIr8xBlRufGvTIe3SshWOgRnzn5UsaJJA/exec';
 
   const defaultConfig = {
     barberName: 'LA ESTACION - BARBERIA',
     days: [0, 1, 3, 4, 5, 6],
     dayHours: {
       '0': { start: 7, end: 13 },
-      '1': { start: 8, end: 18 },
-      '3': { start: 7, end: 18 },
-      '4': { start: 8, end: 18 },
-      '5': { start: 8, end: 18 },
-      '6': { start: 8, end: 18 }
+      '1': { start: 8, end: 19 },
+      '3': { start: 7, end: 19 },
+      '4': { start: 8, end: 19 },
+      '5': { start: 8, end: 19 },
+      '6': { start: 8, end: 19 }
     },
     startHour: 8,
-    endHour: 18,
+    endHour: 19,
     slotMin: 60,
     blocked: [],
     cutTypes: [{name:'Corte clásico', price:0}, {name:'Fade', price:0}, {name:'Corte + barba', price:0}],
@@ -3026,7 +3026,7 @@
     addBotMessage('Estos son los horarios disponibles para el <strong>' + formatDate(dateStr) + '</strong>:');
     // No mostramos los horarios ocupados: el cliente solo puede elegir una hora libre.
     addBookingReplies(freeSlots.map(t=>({
-      label: t,
+      label: formatTime12(t),
       value: t,
       onPick: (v)=>{ chatBooking.time = v; selectedTime = v; askEmail(); }
     })));
@@ -3087,7 +3087,7 @@
       '📱 ' + escapeHtml(chatBooking.phone) + '<br>' +
       '✂️ <strong>' + escapeHtml(chatBooking.cut) + '</strong>' + priceTxt + '<br>' +
       (staffName ? '🪑 Con <strong>' + escapeHtml(staffName) + '</strong><br>' : '') +
-      '📅 <strong>' + formatDate(chatBooking.date) + '</strong> a las <strong>' + chatBooking.time + '</strong><br>' +
+      '📅 <strong>' + formatDate(chatBooking.date) + '</strong> a las <strong>' + formatTime12(chatBooking.time) + '</strong><br>' +
       '📧 ' + escapeHtml(chatBooking.email) + '<br><br>' +
       '¿Confirmamos?'
     );
@@ -3140,7 +3140,7 @@
       const barberTxt = staffNameById(staffId);
       addBotMessage(
         '🎉 <strong>¡Turno confirmado!</strong><br><br>' +
-        escapeHtml(chatBooking.name) + ' — ' + formatDate(chatBooking.date) + ' a las ' + chatBooking.time +
+        escapeHtml(chatBooking.name) + ' — ' + formatDate(chatBooking.date) + ' a las ' + formatTime12(chatBooking.time) +
         ' (' + escapeHtml(chatBooking.cut) + priceTxt + ')' +
         (barberTxt ? '<br>🪑 Barbero: <strong>' + escapeHtml(barberTxt) + '</strong>' : '') +
         '<br>N.° <strong>' + result.appointment.id + '</strong><br><br>' +
@@ -3150,7 +3150,7 @@
         if(!ok) return;
         showLocalPush(
           'Turno confirmado — ' + (config.barberName || 'Barbería'),
-          formatDate(chatBooking.date) + ' a las ' + chatBooking.time + ' · ' + (chatBooking.cut || ''),
+          formatDate(chatBooking.date) + ' a las ' + formatTime12(chatBooking.time) + ' · ' + (chatBooking.cut || ''),
           'turno-' + result.appointment.id
         );
       });
@@ -3211,7 +3211,7 @@
         let html = 'Encontré <strong>' + mine.length + '</strong> turno(s) a tu nombre:<br><br>';
         mine.forEach(a=>{
           html += '<div class="chat-ticket">' +
-            '<strong>' + formatDate(a.date) + '</strong> · ' + a.time + '<br>' +
+            '<strong>' + formatDate(a.date) + '</strong> · ' + formatTime12(a.time) + '<br>' +
             escapeHtml(a.cut || 'Sin especificar') +
             (a.price ? ' · $' + a.price : '') +
             '<br><span style="color:#5b6672;font-size:12px;">N.° ' + a.id + '</span></div>';
@@ -3236,6 +3236,17 @@
 
   // ---------- utilidades de fecha y horarios ----------
   const today = new Date();
+  function formatTime12(time24) {
+    if (!time24) return '';
+    const parts = String(time24).split(':');
+    if (parts.length < 2) return time24;
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    const ampm = h >= 12 ? 'pm' : 'am';
+    h = h % 12;
+    h = h ? h : 12; // Si es 0, se convierte en 12
+    return h + ':' + m + ' ' + ampm;
+  }
 
   function dateToWeekday(dateStr){
     const [y,m,d] = dateStr.split('-').map(Number);
@@ -3771,7 +3782,7 @@
       <div class="ticket${attended ? ' ticket-attended' : ''}${canceled ? ' ticket-canceled' : ''}">
         <div class="ticket-main">
           <div class="ticket-name">${escapeHtml(a.client)}</div>
-          <div class="ticket-date">${formatDate(a.date)} · ${a.time} · ${a.id}</div>
+          <div class="ticket-date">${formatDate(a.date)} · ${formatTime12(a.time)} · ${a.id}</div>
           <span class="ticket-cut-tag">${escapeHtml(a.cut || 'Sin especificar')}${a.price ? ' · $'+a.price : ''}</span>
           ${phoneLink ? `<div class="helper" style="margin-top:4px;">${phoneLink}</div>` : ''}
           ${barber ? `<div class="helper" style="margin-top:4px;">🪑 ${escapeHtml(barber)}</div>` : ''}
@@ -3780,7 +3791,7 @@
         </div>
         <div class="ticket-stub">
           <div class="num">${a.id.replace('APT-','')}</div>
-          <div class="time">${a.time}</div>
+          <div class="time">${formatTime12(a.time)}</div>
         </div>
       </div>`;
   }
@@ -3917,7 +3928,7 @@
       const taken = takenTimes.includes(t);
       const isCurrent = dateStr === rescheduleTarget.date && t === rescheduleTarget.time;
       div.className = 'slot' + (taken ? ' taken' : '');
-      div.textContent = t + (isCurrent ? ' (actual)' : '');
+      div.textContent = formatTime12(t) + (isCurrent ? ' (actual)' : '');
       if(!taken){
         div.addEventListener('click', ()=>{
           rescheduleSlotsGrid.querySelectorAll('.slot').forEach(s=>s.classList.remove('selected'));
@@ -4138,7 +4149,7 @@
       if (isAppointmentPast(apt)) {
         content.innerHTML = `
           <h2>${escapeHtml(apt.client)}</h2>
-          <p>${formatDate(apt.date)} a las ${apt.time} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
+          <p>${formatDate(apt.date)} a las ${formatTime12(apt.time)} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
           <p class="helper">N.º de turno: ${apt.id}</p>
           <div class="msg ok" style="margin-top:16px;">✓ Este turno ya fue atendido.</div>
         `;
@@ -4147,7 +4158,7 @@
 
       content.innerHTML = `
         <h2>${escapeHtml(apt.client)}</h2>
-        <p>${formatDate(apt.date)} a las ${apt.time} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
+        <p>${formatDate(apt.date)} a las ${formatTime12(apt.time)} — ${escapeHtml(apt.cut||'Sin especificar')}${apt.price ? ' · $'+apt.price : ''}</p>
         <p class="helper">N.º de turno: ${apt.id}</p>
         <div class="modal-actions">
           <button class="btn secondary" id="selfRescheduleBtn">Reprogramar</button>
