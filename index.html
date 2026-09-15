@@ -3344,7 +3344,7 @@
     const msg =
       'Recordatorio de mi turno en ' + shop + ':\n\n' +
       '👤 ' + (apt.client || '') + '\n' +
-      '📅 ' + formatDate(apt.date) + ' a las ' + (apt.time || '') + '\n' +
+      '📅 ' + formatDate(apt.date) + ' a las ' + formatTime12(apt.time) + '\n' +
       '✂️ ' + (apt.cut || 'Sin especificar') + priceTxt + '\n' +
       'N.° ' + (apt.id || '') + '\n\n' +
       '¡Nos vemos!';
