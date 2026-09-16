@@ -1906,7 +1906,7 @@
   // para que TODOS los visitantes puedan usar la página (y los enlaces de "gestionar mi
   // turno" que se mandan por correo) sin que cada uno tenga que configurarla a mano.
   // Si la dejás vacía, cada navegador la puede configurar igual con el botón ⚙.
-  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxzykyVZk7lh4MV_wDQob8kNVxjbBgbkSrvNG-PqPWOD5THoA_mXFkmZckAtiLO6qUEBg/exec';
+  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwuzUtXwpaW_Bmci-F296i8EuRDCUaLmJsbtDIr8xBlRufGvTIe3SshWOgRnzn5UsaJJA/exec';
 
   const defaultConfig = {
     barberName: 'LA ESTACION - BARBERIA',
@@ -2876,14 +2876,40 @@
     chatStep = 'phone';
     clearQuickReplies();
     const w = chatTextWidget('Ej: 3001234567', 'tel');
-    addBotMessage('Gracias, <strong>' + escapeHtml(chatBooking.name) + '</strong>.<br><br>¿Cuál es tu <strong>número de teléfono</strong>?<br><span style="font-size:13px;color:#5b6672;">Por si necesitamos contactarte por tu turno.</span>', w.html);
+    addBotMessage('Gracias, <strong>' + escapeHtml(chatBooking.name) + '</strong>.<br><br>¿Cuál es tu <strong>número de teléfono</strong>?<br><span style="font-size:13px;color:#5b6672;">Solo el número colombiano, <strong>sin +57</strong>. Ejemplo: <strong>3001234567</strong></span>', w.html);
     wireTextWidget(w, (text, retry)=>{
-      const digits = text.replace(/\D/g, '');
-      if(digits.length < 7 || digits.length > 15){
-        showTypingThen(()=>{ addBotMessage('Ese teléfono no parece válido. Escribilo con código de área, por ejemplo: <strong>3001234567</strong>'); retry(); });
+      // No permitir / limpiar el prefijo de país +57 o 57
+      let cleaned = String(text || '').trim();
+      // Quitar espacios, guiones, paréntesis
+      cleaned = cleaned.replace(/[\s\-().]/g, '');
+      // Si empieza con +57 o 0057 o 57 (código Colombia), se lo sacamos
+      if(/^\+?57/.test(cleaned) || /^0057/.test(cleaned)){
+        cleaned = cleaned.replace(/^\+?57/, '').replace(/^0057/, '');
+      }
+      // Solo dígitos al final
+      const digits = cleaned.replace(/\D/g, '');
+      // Si el usuario puso solo +57 / 57 sin número local
+      if(digits.length === 0){
+        showTypingThen(()=>{ addBotMessage('No hace falta el <strong>+57</strong>. Escribí solo tu número, por ejemplo: <strong>3001234567</strong>'); retry(); });
         return;
       }
-      chatBooking.phone = text.trim();
+      // Números colombianos móviles suelen ser 10 dígitos; aceptamos 7–12 sin código de país
+      if(digits.length < 7 || digits.length > 12){
+        showTypingThen(()=>{ addBotMessage('Ese teléfono no parece válido. Escribilo <strong>sin +57</strong>, por ejemplo: <strong>3001234567</strong>'); retry(); });
+        return;
+      }
+      // Si después de limpiar sigue empezando raro (quedó 57 de más por error), avisar
+      if(digits.length === 12 && digits.indexOf('57') === 0){
+        // caso 573001234567 sin el + → ya lo habríamos limpiado arriba si tenía +;
+        // si llegó acá con 12 dígitos empezando en 57, sacamos el 57
+        const local = digits.slice(2);
+        if(local.length >= 7 && local.length <= 10){
+          chatBooking.phone = local;
+          showTypingThen(askCutType);
+          return;
+        }
+      }
+      chatBooking.phone = digits;
       showTypingThen(askCutType);
     });
     addBookingReplies([]);
