@@ -1713,6 +1713,18 @@
             </select>
             <div class="helper">Por defecto cada turno dura 1 hora. El cliente solo ve los horarios libres; vos definís días, horarios y bloqueos en este panel.</div>
           </div>
+          <div class="field">
+            <label for="lunchHour">Hora de almuerzo</label>
+            <select id="lunchHour">
+              <option value="">Sin almuerzo</option>
+              <option value="11">11:00 AM</option>
+              <option value="12">12:00 PM</option>
+              <option value="13" selected>1:00 PM</option>
+              <option value="14">2:00 PM</option>
+              <option value="15">3:00 PM</option>
+            </select>
+            <div class="helper">Se bloquea 1 hora en todos los días de atención. Por defecto 1:00 PM.</div>
+          </div>
         </div>
 
         <div class="row">
@@ -1894,7 +1906,7 @@
   // para que TODOS los visitantes puedan usar la página (y los enlaces de "gestionar mi
   // turno" que se mandan por correo) sin que cada uno tenga que configurarla a mano.
   // Si la dejás vacía, cada navegador la puede configurar igual con el botón ⚙.
-  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwuzUtXwpaW_Bmci-F296i8EuRDCUaLmJsbtDIr8xBlRufGvTIe3SshWOgRnzn5UsaJJA/exec';
+  const DEFAULT_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxzykyVZk7lh4MV_wDQob8kNVxjbBgbkSrvNG-PqPWOD5THoA_mXFkmZckAtiLO6qUEBg/exec';
 
   const defaultConfig = {
     barberName: 'LA ESTACION - BARBERIA',
@@ -1910,6 +1922,7 @@
     startHour: 8,
     endHour: 19,
     slotMin: 60,
+    lunchHour: 13,  // 13 = 1:00 PM. null = sin almuerzo. Se aplica a todos los días.
     blocked: [],
     cutTypes: [{name:'Corte clásico', price:0}, {name:'Fade', price:0}, {name:'Corte + barba', price:0}],
     staff: [{id:'default', name:'', calendarId:''}],
@@ -2451,6 +2464,14 @@
       config.days = [0, 1, 3, 4, 5, 6];
     }
     if(!config.slotMin) config.slotMin = 60;
+    if(config.lunchHour === '' || config.lunchHour === undefined){
+      config.lunchHour = 13;
+    } else if(config.lunchHour === null){
+      config.lunchHour = null;
+    } else {
+      var _lh = Number(config.lunchHour);
+      config.lunchHour = (isFinite(_lh) && _lh >= 0 && _lh <= 23) ? Math.floor(_lh) : 13;
+    }
     appointments = Array.isArray(data.appointments) ? data.appointments : [];
   }
 
@@ -2627,7 +2648,13 @@
       const h = getDayHours(d);
       return DIAS_LARGO[d] + ' ' + h.start + ':00–' + h.end + ':00';
     });
-    return 'Atendemos: ' + parts.join(' · ') + '. Turnos de ' + (config.slotMin || 60) + ' min.';
+    var lunchTxt = '';
+    if(config.lunchHour !== null && config.lunchHour !== undefined && config.lunchHour !== '' && isFinite(Number(config.lunchHour))){
+      var lh = Number(config.lunchHour);
+      var ampm = lh === 0 ? '12:00 AM' : (lh < 12 ? lh + ':00 AM' : (lh === 12 ? '12:00 PM' : (lh - 12) + ':00 PM'));
+      lunchTxt = ' Almuerzo: ' + ampm + '.';
+    }
+    return 'Atendemos: ' + parts.join(' · ') + '. Turnos de ' + (config.slotMin || 60) + ' min.' + lunchTxt;
   }
 
   function scrollChatToBottom(){
@@ -3259,10 +3286,17 @@
     const endTotal = Number(hours.end) * 60;
     let cur = Number(hours.start) * 60;
     const step = Number(config.slotMin) || 60;
+    const lunchHour = (config.lunchHour !== null && config.lunchHour !== undefined && config.lunchHour !== '')
+      ? Number(config.lunchHour) : null;
     while(cur + step <= endTotal){
-      const hh = Math.floor(cur/60).toString().padStart(2,'0');
-      const mm = (cur%60).toString().padStart(2,'0');
-      slots.push(hh+':'+mm);
+      const hhNum = Math.floor(cur/60);
+      const mmNum = cur % 60;
+      // Saltar hora de almuerzo (ej. 13:00 si lunchHour === 13)
+      if(!(isFinite(lunchHour) && hhNum === lunchHour && mmNum === 0)){
+        const hh = hhNum.toString().padStart(2,'0');
+        const mm = mmNum.toString().padStart(2,'0');
+        slots.push(hh+':'+mm);
+      }
       cur += step;
     }
     return slots;
@@ -3512,6 +3546,19 @@
     document.getElementById('slotMin').value = String(config.slotMin);
     document.getElementById('reminderHoursBefore').value = config.reminderHoursBefore || 24;
     document.getElementById('maxBookingsPerEmailPerDay').value = config.maxBookingsPerEmailPerDay || 3;
+    var lunchEl = document.getElementById('lunchHour');
+    if(lunchEl){
+      var lv = (config.lunchHour !== null && config.lunchHour !== undefined && config.lunchHour !== '')
+        ? String(config.lunchHour) : '';
+      if(lv && !Array.from(lunchEl.options).some(function(o){ return o.value === lv; })){
+        var opt = document.createElement('option');
+        opt.value = lv;
+        var n = Number(lv);
+        opt.textContent = (n === 0 ? '12:00 AM' : n < 12 ? n + ':00 AM' : n === 12 ? '12:00 PM' : (n - 12) + ':00 PM');
+        lunchEl.appendChild(opt);
+      }
+      lunchEl.value = lv;
+    }
     var waEl = document.getElementById('whatsappPhoneInput');
     if(waEl) waEl.value = config.whatsappPhone || '';
     document.querySelectorAll('.day-chip').forEach(chip=>{
@@ -3664,6 +3711,9 @@
     const maxBookingsPerEmailPerDay = Number(document.getElementById('maxBookingsPerEmailPerDay').value) || 3;
     const staff = workingStaff.length > 0 ? workingStaff.slice() : [{id:'default', name:'', calendarId:''}];
     const whatsappPhone = (document.getElementById('whatsappPhoneInput').value || '').replace(/\D/g, '');
+    const lunchRaw = document.getElementById('lunchHour')
+      ? document.getElementById('lunchHour').value : '';
+    const lunchHour = (lunchRaw === '' || lunchRaw === null) ? null : Number(lunchRaw);
 
     const dayHours = collectDayHoursFromEditor();
     // Fallback global = el rango más amplio de los días elegidos
@@ -3677,6 +3727,7 @@
       startHour: minStart,
       endHour: maxEnd,
       slotMin,
+      lunchHour,
       days,
       dayHours,
       cutTypes: workingCutTypes.slice(),
